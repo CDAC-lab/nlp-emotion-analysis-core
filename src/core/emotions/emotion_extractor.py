@@ -5,6 +5,9 @@ Author: Achini
 
 import re
 import src.core.emotions.emotion_utilities as emotion_utils
+from nltk.tokenize import sent_tokenize
+import src.utils.text_processor as text_utils
+import operator
 
 
 def get_emotion_profile_per_post(clean_post, EMO_RESOURCES):
@@ -24,8 +27,10 @@ def get_emotion_profile_per_post(clean_post, EMO_RESOURCES):
 
     sent_words = str(clean_post).lower().split()
     post_len = len(sent_words)
-
+    """ emotion extraction """
+    # try:
     for key in EMOTION_MAP.keys():
+        emotion_val_list = []
         for emoWord in EMOTION_MAP[key]:
             try:
                 emoWord = emoWord.strip().lower()
@@ -39,49 +44,87 @@ def get_emotion_profile_per_post(clean_post, EMO_RESOURCES):
 
                 if match_found:
                     selected_emo = key
+                    all_emo_words.append(emoWord)
 
                     """ handle intensifiers"""
                     if len(emoWord.split()) > 1:
                         emoWord = emoWord.split()[0]
                     end_ind_int = sent_words.index(emoWord)
-                    start_ind_int = end_ind_int - 2
+                    start_ind_int = end_ind_int - 3
+                    if start_ind_int < 0:
+                        start_ind_int = 0
                     text_chunk_int = sent_words[start_ind_int:end_ind_int]
-                    intensity = emotion_utils.check_intensifiers(text_chunk_int, INTENSIFIER_MAP)
+                    has_intensity, booster = emotion_utils.check_intensifiers(text_chunk_int, INTENSIFIER_MAP)
 
                     """ handle negation """
                     end_ind = sent_words.index(emoWord)
-                    if end_ind < 2:
+                    if end_ind < 3:
                         start_ind = 0
                     else:
-                        start_ind = end_ind - 2
+                        start_ind = end_ind - 3
                     text_chunk = sent_words[start_ind:end_ind]
                     negation = emotion_utils.check_negation(text_chunk, NEGATION_MAP)
                     if negation:
                         # get opposite emotion
                         selected_emo = emotion_utils.get_opposite_emotion(key)
+
+                    """ handle empathy """
+                    if key == 'sad':
+                        templates = emotion_utils.get_empathetic_templates()
+                        for temp in templates:
+                            pattern = re.compile(r'\b%s\b' % temp, re.I)
+                            empath_match = pattern.search(clean_post)
+                            if empath_match is not None:
+                                selected_emo = None
+                            else:
+                                firstperson = emotion_utils.is_firstperson_post(sent_words)
+                                if not firstperson:
+                                    selected_emo = None
+
+                    """ assign value """
                     if selected_emo is not None:
                         emo_value = 1
-                        all_emo_words.append(matched_emotion)
-                        if intensity:
-                            emo_value = 2
-                        if emo_counts.get(selected_emo) is not None:
-                            current_count = emo_counts.get(selected_emo)
-                            emo_counts[selected_emo] = current_count + emo_value
+                        emo_seq.append(selected_emo)
+                        if has_intensity:
+                            emo_value = 1 * booster
                         else:
-                            emo_counts[selected_emo] = emo_value
+                            emo_value = 1 * 0.5
+                    else:
+                        emo_value = 0
 
-                    emo_seq.append(selected_emo)
-            except:
-                emo_counts[key] = 0
+                    emotion_val_list.append(emo_value)
+            except Exception as e:
+                print(e)
 
-        if emo_counts.get(key) is None:
-            emo_counts[key] = 0
-        if post_len > 0:
-            emotion_profile[key] = emo_counts[key] / post_len
-        else:
-            emotion_profile[key] = 0
+        emotion_profile[key] = sum(emotion_val_list)
 
-    return emotion_profile
+    return emotion_profile, emo_seq
+
+
+def get_emotion_sequence(posts, EMO_RESOURCES):
+    emo_seq = []
+    agg_profile = {}
+
+    for post in posts:
+        clean_post = text_utils.clean_text(post)
+        sentences = sent_tokenize(clean_post)
+
+        for sent in sentences:
+            profile, seq = get_emotion_profile_per_post(sent, EMO_RESOURCES)
+            if profile != {}:
+                max_emotion = max(profile.items(), key=operator.itemgetter(1))[0]
+                max_emo_val = max(profile.items(), key=operator.itemgetter(1))[1]
+
+            if max_emo_val > 0:
+                for key in profile:
+                    if profile[key] == max_emo_val:
+                        emo_seq.append(max_emotion)
+                    if key in agg_profile.keys():
+                        agg_profile[key] = agg_profile[key] + profile[key]
+                    else:
+                        agg_profile[key] = profile[key]
+
+    return emo_seq, agg_profile
 
 
 def get_aggregated_emotions(all_posts, EMO_RESOURCES):
@@ -98,14 +141,17 @@ def get_aggregated_emotions(all_posts, EMO_RESOURCES):
         agg_profile[KEY] = 0.0
 
     for post in all_posts:
-        post_profile = get_emotion_profile_per_post(post, EMO_RESOURCES)
-        for e in post_profile:
-            agg_profile[e] = agg_profile[e] + post_profile[e]
+        try:
+            post_profile = get_emotion_profile_per_post(post, EMO_RESOURCES)
+            for e in post_profile:
+                agg_profile[e] = agg_profile[e] + post_profile[e]
 
-            if emotion_utils.get_sentiment_of_emotions(e) == 'POS':
-                agg_POS += post_profile[e]
-            elif emotion_utils.get_sentiment_of_emotions(e) == 'NEG':
-                agg_NEG += post_profile[e]
+                if emotion_utils.get_sentiment_of_emotions(e) == 'POS':
+                    agg_POS += post_profile[e]
+                elif emotion_utils.get_sentiment_of_emotions(e) == 'NEG':
+                    agg_NEG += post_profile[e]
+        except:
+            post_profile = {}
 
     agg_sum = {'aggPOS': agg_POS, 'aggNEG': agg_NEG}
 

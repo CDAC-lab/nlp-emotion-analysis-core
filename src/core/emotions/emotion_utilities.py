@@ -19,20 +19,26 @@ def check_negation(text, NEGATION_MAP):
     return neg_match
 
 
+
 def check_intensifiers(text, INTENSIFIER_MAP):
     """
     Utility function to check intensifiers of an emotion
     :param text: text chunk with the emotion term
-    :return: boolean value for intensifiers
+    :return: boolean value and booster value for intensifiers
     """
-
+    # BOOSTER_MAP = {"B_INCR": 2,
+    #                "B_DECR": 0.5}
     intensity_word_list = INTENSIFIER_MAP
     has_intensity = False
-    for int_word in intensity_word_list:
-        if int_word.strip() in text:
-            has_intensity = True
+    booster = 'NULL'
+    for int_term in intensity_word_list:
+        intensifier = int_term.split(':')[0].strip()
 
-    return has_intensity
+        if intensifier in text:
+            has_intensity = True
+            booster = float(int_term.split(':')[2].strip())
+
+    return has_intensity, booster
 
 
 def get_opposite_emotion(key):
@@ -71,3 +77,34 @@ def get_sentiment_of_emotions(emotion):
         return 'NEG'
     else:
         return None
+
+
+def get_empathetic_templates():
+    templates = ['sorry to', 'sad to', 'sorry for', 'must be hard', 'sorry that', 'for you', 'QUE']
+    return templates
+
+
+def is_firstperson_post(sent_words):
+    """
+    Resolve pro noun use
+    :param sent_words: sentence
+    :return: first person post True/False
+    """
+    first_person_list = ['i', 'myself', 'me']
+    second_person_list = ['you', 'yourself', 'your']
+    i_count = 0
+    you_count = 0
+    match = False
+    for term1 in sent_words:
+        for i in first_person_list:
+            if term1 == i:
+                i_count += 1
+
+    for term2 in sent_words:
+        for j in second_person_list:
+            if term2 == j:
+                you_count += 1
+
+    if i_count >= you_count:
+        match = True
+    return match
