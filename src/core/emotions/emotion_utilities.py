@@ -10,12 +10,13 @@ def check_negation(text, NEGATION_MAP):
     :param text: text chunk with the emotion term
     :return: boolean value for negation
     """
+    print(text)
     neg_word_list = NEGATION_MAP
     neg_match = False
     for neg_word in neg_word_list:
         if neg_word.strip() in text:
             neg_match = True
-
+    print(neg_match)
     return neg_match
 
 
@@ -29,12 +30,14 @@ def check_intensifiers(text, INTENSIFIER_MAP):
     # BOOSTER_MAP = {"B_INCR": 2,
     #                "B_DECR": 0.5}
     intensity_word_list = INTENSIFIER_MAP
+    print(intensity_word_list)
     has_intensity = False
     booster = 'NULL'
     for int_term in intensity_word_list:
         intensifier = int_term.split(':')[0].strip()
-
+        # print(intensifier)
         if intensifier in text:
+            # print('yes')
             has_intensity = True
             booster = float(int_term.split(':')[2].strip())
 
@@ -53,7 +56,11 @@ def get_opposite_emotion(key):
                          "trust": "fear",
                          'fear': 'trust',
                          'anger' : 'joy',
-                         'afraid': 'trust'
+                         'afraid': 'trust',
+                         'negative':'positive',
+                         'positive': 'negative',
+                         'model_strong': 'model_weak',
+                         'model_weak': 'model_strong',
                          }
 
     if opposite_emotions.keys().__contains__(key):

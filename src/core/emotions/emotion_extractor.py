@@ -2,7 +2,9 @@
 Date: 2/27/2020 5:58 PM
 Author: Achini
 """
+from nltk.stem import PorterStemmer
 
+porter = PorterStemmer()
 import re
 import src.core.emotions.emotion_utilities as emotion_utils
 from nltk.tokenize import sent_tokenize
@@ -11,6 +13,7 @@ import operator
 
 
 def get_emotion_profile_per_post(clean_post, EMO_RESOURCES):
+    # print('viola')
     """
     Function to process each post to extract emotion mentions
     :param clean_post: post to be processed
@@ -26,11 +29,18 @@ def get_emotion_profile_per_post(clean_post, EMO_RESOURCES):
     emo_seq = []
 
     sent_words = str(clean_post).lower().split()
+    print('sent_words',sent_words)
+    sent_words_st = [porter.stem(wd) for wd in sent_words]
+    print('sent_words', sent_words)
+    print(EMOTION_MAP)
+    # print(len(EMOTION_MAP['anger']))
     post_len = len(sent_words)
     """ emotion extraction """
     # try:
     for key in EMOTION_MAP.keys():
-        emotion_val_list = []
+        emotion_profile[key] = []
+    for key in EMOTION_MAP.keys():
+
         for emoWord in EMOTION_MAP[key]:
             try:
                 emoWord = emoWord.strip().lower()
@@ -38,26 +48,32 @@ def get_emotion_profile_per_post(clean_post, EMO_RESOURCES):
 
                 if len(emoWord.split()) > 1:
                     pattern = re.compile(r'\b%s\b' % emoWord, re.I)
+                    print(clean_post)
+                    clean_post = (' ').join(sent_words_st)
                     match_found = pattern.search(clean_post)
+
                 else:
-                    match_found = emoWord in sent_words
+                    match_found = emoWord in sent_words_st
+
 
                 if match_found:
                     selected_emo = key
                     all_emo_words.append(emoWord)
 
                     """ handle intensifiers"""
+                    # print('intense')
                     if len(emoWord.split()) > 1:
                         emoWord = emoWord.split()[0]
-                    end_ind_int = sent_words.index(emoWord)
+                    end_ind_int = sent_words_st.index(emoWord)
                     start_ind_int = end_ind_int - 3
                     if start_ind_int < 0:
                         start_ind_int = 0
                     text_chunk_int = sent_words[start_ind_int:end_ind_int]
                     has_intensity, booster = emotion_utils.check_intensifiers(text_chunk_int, INTENSIFIER_MAP)
-
+                    # print('has int',has_intensity)
                     """ handle negation """
-                    end_ind = sent_words.index(emoWord)
+                    print('negate')
+                    end_ind = sent_words_st.index(emoWord)
                     if end_ind < 3:
                         start_ind = 0
                     else:
@@ -66,13 +82,17 @@ def get_emotion_profile_per_post(clean_post, EMO_RESOURCES):
                     negation = emotion_utils.check_negation(text_chunk, NEGATION_MAP)
                     if negation:
                         # get opposite emotion
+                        print(negation)
                         selected_emo = emotion_utils.get_opposite_emotion(key)
+                        print(selected_emo)
+
 
                     """ handle empathy """
                     if key == 'sad':
                         templates = emotion_utils.get_empathetic_templates()
                         for temp in templates:
                             pattern = re.compile(r'\b%s\b' % temp, re.I)
+                            clean_post = (' ').join(sent_words_st)
                             empath_match = pattern.search(clean_post)
                             if empath_match is not None:
                                 selected_emo = None
@@ -83,6 +103,7 @@ def get_emotion_profile_per_post(clean_post, EMO_RESOURCES):
 
                     """ assign value """
                     if selected_emo is not None:
+                        print('yes',selected_emo)
                         emo_value = 1
                         emo_seq.append(selected_emo)
                         if has_intensity:
@@ -91,12 +112,13 @@ def get_emotion_profile_per_post(clean_post, EMO_RESOURCES):
                             emo_value = 1 * 0.5
                     else:
                         emo_value = 0
+                    emotion_profile[selected_emo].append(emo_value)
 
-                    emotion_val_list.append(emo_value)
             except Exception as e:
+                print('exception')
                 print(e)
 
-        emotion_profile[key] = sum(emotion_val_list)
+        emotion_profile[key] = sum(emotion_profile[key])
 
     return emotion_profile, emo_seq
 
